@@ -1,0 +1,162 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id    String @id @default(uuid())
+  name  String
+  phone String @unique
+  role  Role   @default(DRIVER)
+
+  // Driver specific fields
+  totalDistanceKm  Float   @default(0.0) 
+  totalHoursWorked Float   @default(0.0) 
+  homeBaseCity     String?
+  rating           Float   @default(0.0)
+  deliveriesCount  Int     @default(0)
+  status           DriverStatus @default(ON_DUTY)
+  avatarColor      String?
+  initials         String?
+  vehicleType      String?
+  currentVehicleNo String?
+
+  trucks    Truck[]
+  shipments Shipment[]
+  eWayBills EWayBill[]
+}
+
+enum Role {
+  DRIVER
+  DISPATCHER
+  EXTERNAL_SHIPPER
+}
+
+enum DriverStatus {
+  ON_DUTY
+  IN_TRANSIT
+  RESTING
+}
+
+// 2. Asset Management
+model Truck {
+  id           String @id @default(uuid())
+  licensePlate String @unique
+  model        String?
+  type         String?
+  ownerId      String
+  owner        User   @relation(fields: [ownerId], references: [id])
+
+  currentLat Float?
+  currentLng Float?
+
+  incomingRelays RelayNode[] @relation("IncomingTruck")
+  outgoingRelays RelayNode[] @relation("OutgoingTruck")
+}
+
+// 3. Agile Infrastructure
+model VirtualHub {
+  id        String      @id @default(uuid())
+  name      String
+  latitude  Float
+  longitude Float
+  relays    RelayNode[]
+}
+
+// 4. The Relay Node (The "Baton Pass")
+model RelayNode {
+  id    String     @id @default(uuid())
+  hubId String
+  hub   VirtualHub @relation(fields: [hubId], references: [id])
+
+  truckAId String
+  truckA   Truck  @relation("IncomingTruck", fields: [truckAId], references: [id])
+
+  truckBId String
+  truckB   Truck  @relation("OutgoingTruck", fields: [truckBId], references: [id])
+  segmentDistanceKm Float
+  segmentTimeHrs    Float
+
+
+  handshakeStatus HandshakeStatus @default(WAITING_FOR_PEERS)
+  otpCode         String
+  gpsVerified     Boolean         @default(false)
+
+
+  cargoImageUrls Json? 
+
+  createdAt DateTime @default(now())
+}
+
+enum HandshakeStatus {
+  WAITING_FOR_PEERS
+  PROXIMITY_LOCKED
+  AUTHORIZED
+  COMPLETED
+  DISPUTED
+}
+
+// 5. External Marketplace
+model Shipment {
+  id                String  @id @default(uuid())
+  shipperId         String
+  shipper           User    @relation(fields: [shipperId], references: [id])
+  isMarketplaceLoad Boolean @default(false)
+  revenueGenerated  Float   @default(0.0)
+  status            ShipmentStatus  @default(PENDING)
+  type              String?
+  route             String?
+  weight            String?
+  priority          Priority @default(LOW)
+  createdAt         DateTime @default(now())
+}
+
+enum ShipmentStatus {
+  PENDING
+  ACTIVE
+  IN_TRANSIT
+  COMPLETED
+  REJECTED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model EWayBill {
+  id          String   @id @default(uuid())
+  billNo      String   @unique
+  vehicleNo   String
+  from        String
+  to          String
+  distance    String
+  driverId    String
+  driver      User     @relation(fields: [driverId], references: [id])
+  cargoValue  String
+  validUntil  DateTime
+  status      EwbStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+}
+
+enum EwbStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRING_SOON
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  day       String
+  requests  Int
+  type      String   // E.g., "WEEKLY_ACTIVITY"
+  createdAt DateTime @default(now())
+}
+
