@@ -1,75 +1,115 @@
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
+// ============================================
+// 1. USER MODEL
+// ============================================
 model User {
   id    String @id @default(uuid())
   name  String
   phone String @unique
   role  Role   @default(DRIVER)
 
-  // Driver specific fields
-  totalDistanceKm  Float   @default(0.0) 
-  totalHoursWorked Float   @default(0.0) 
+  // Driver specific fields (null for others)
+  totalDistanceKm  Float        @default(0.0)
+  totalHoursWorked Float        @default(0.0)
   homeBaseCity     String?
-  rating           Float   @default(0.0)
-  deliveriesCount  Int     @default(0)
+  rating           Float        @default(0.0)
+  deliveriesCount  Int          @default(0)
   status           DriverStatus @default(ON_DUTY)
   avatarColor      String?
   initials         String?
   vehicleType      String?
   currentVehicleNo String?
 
-  trucks    Truck[]
-  shipments Shipment[]
-  eWayBills EWayBill[]
+  // Fair-Share Algorithm
+  weeklyKmDriven Float    @default(0.0)
+  weekResetDate  DateTime @default(now())
+  lastActiveDate DateTime @default(now())
+
+  // ✅ NEW: Earnings tracking
+  totalEarnings  Float @default(0.0)
+  weeklyEarnings Float @default(0.0)
+
+  // Relations
+  trucks                Truck[]
+  createdShipments      Shipment[]     @relation("ShipperToShipments")
+  approvedShipments     Shipment[]     @relation("DispatcherApprovals")
+  assignedDeliveries    Delivery[]     @relation("DriverDeliveries")
+  eWayBills             EWayBill[]
+  notifications         Notification[]
+  transactions          Transaction[]  // ✅ NEW
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum Role {
   DRIVER
+  SHIPPER
   DISPATCHER
-  EXTERNAL_SHIPPER
 }
 
 enum DriverStatus {
   ON_DUTY
   IN_TRANSIT
   RESTING
+  OFF_DUTY
 }
 
-// 2. Asset Management
+// ============================================
+// 2. TRUCK MODEL
+// ============================================
 model Truck {
   id           String @id @default(uuid())
   licensePlate String @unique
   model        String?
   type         String?
-  ownerId      String
-  owner        User   @relation(fields: [ownerId], references: [id])
+  capacity     Float?
+  fuelLevel    Float?
+  mileage      Float?
+  nextService  Float?
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id])
 
   currentLat Float?
   currentLng Float?
 
   incomingRelays RelayNode[] @relation("IncomingTruck")
   outgoingRelays RelayNode[] @relation("OutgoingTruck")
+  deliveries     Delivery[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-// 3. Agile Infrastructure
+// ============================================
+// 3. VIRTUAL HUB
+// ============================================
 model VirtualHub {
-  id        String      @id @default(uuid())
+  id        String  @id @default(uuid())
   name      String
+  address   String?
   latitude  Float
   longitude Float
-  relays    RelayNode[]
+  type      String?
+
+  relays RelayNode[]
+
+  createdAt DateTime @default(now())
 }
 
-// 4. The Relay Node (The "Baton Pass")
+// ============================================
+// 4. RELAY NODE
+// ============================================
 model RelayNode {
   id    String     @id @default(uuid())
   hubId String
@@ -80,49 +120,101 @@ model RelayNode {
 
   truckBId String
   truckB   Truck  @relation("OutgoingTruck", fields: [truckBId], references: [id])
+
   segmentDistanceKm Float
   segmentTimeHrs    Float
 
-
   handshakeStatus HandshakeStatus @default(WAITING_FOR_PEERS)
-  otpCode         String
-  gpsVerified     Boolean         @default(false)
 
+  otpCode     String?
+  qrCodeData  String?
+  gpsVerified Boolean @default(false)
 
-  cargoImageUrls Json? 
+  photoFront     String?
+  photoBack      String?
+  photoLeft      String?
+  photoRight     String?
+  photoTimestamp DateTime?
+
+  driverASignature String?
+  driverBSignature String?
+
+  eWayBillsTransferred Int     @default(0)
+  eWayBillStatus       String?
+
+  cargoImageUrls Json?
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliveries Delivery[]
 }
 
 enum HandshakeStatus {
   WAITING_FOR_PEERS
   PROXIMITY_LOCKED
+  GPS_VERIFIED
+  PHOTOS_CAPTURED
+  QR_SCANNED
+  SIGNATURES_COLLECTED
   AUTHORIZED
   COMPLETED
   DISPUTED
 }
 
-// 5. External Marketplace
+// ============================================
+// 5. SHIPMENT MODEL
+// ============================================
 model Shipment {
-  id                String  @id @default(uuid())
-  shipperId         String
-  shipper           User    @relation(fields: [shipperId], references: [id])
+  id        String @id @default(uuid())
+  shipperId String
+  shipper   User   @relation("ShipperToShipments", fields: [shipperId], references: [id])
+
+  dispatcherId         String?
+  dispatcher           User?     @relation("DispatcherApprovals", fields: [dispatcherId], references: [id])
+  dispatcherApprovedAt DateTime?
+  dispatcherRejectedAt DateTime?
+  rejectionReason      String?
+
+  pickupLocation  String?
+  pickupLat       Float?
+  pickupLng       Float?
+  pickupTime      DateTime?
+
+  dropLocation String?
+  dropLat      Float?
+  dropLng      Float?
+  dropTime     DateTime?
+
+  cargoType           String?
+  cargoWeight         Float?
+  specialInstructions String?
+
+  estimatedPrice Float?
+  finalPrice     Float?
+
+  status   ShipmentStatus @default(PENDING)
+  priority Priority       @default(LOW)
+
   isMarketplaceLoad Boolean @default(false)
-  revenueGenerated  Float   @default(0.0)
-  status            ShipmentStatus  @default(PENDING)
-  type              String?
-  route             String?
-  weight            String?
-  priority          Priority @default(LOW)
-  createdAt         DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  delivery Delivery?
 }
 
 enum ShipmentStatus {
   PENDING
-  ACTIVE
+  AWAITING_DISPATCHER
+  DISPATCHER_APPROVED
+  DISPATCHER_REJECTED
+  DRIVER_NOTIFIED
+  DRIVER_ACCEPTED
+  DRIVER_REJECTED
   IN_TRANSIT
   COMPLETED
-  REJECTED
+  CANCELLED
 }
 
 enum Priority {
@@ -131,32 +223,161 @@ enum Priority {
   HIGH
 }
 
-model EWayBill {
-  id          String   @id @default(uuid())
-  billNo      String   @unique
-  vehicleNo   String
-  from        String
-  to          String
-  distance    String
+// ============================================
+// 6. DELIVERY MODEL
+// ============================================
+model Delivery {
+  id       String @id @default(uuid())
+  driverId String
+  driver   User   @relation("DriverDeliveries", fields: [driverId], references: [id])
+
+  truckId String?
+  truck   Truck?  @relation(fields: [truckId], references: [id])
+
+  shipmentId String?   @unique
+  shipment   Shipment? @relation(fields: [shipmentId], references: [id])
+
+  pickupLocation String
+  pickupLat      Float
+  pickupLng      Float
+  pickupTime     DateTime?
+
+  dropLocation String
+  dropLat      Float
+  dropLng      Float
+  dropTime     DateTime?
+  estimatedETA DateTime?
+
+  cargoType   String
+  cargoWeight Float
+  distanceKm  Float
+  packageId   String?
+
+  // ✅ NEW: Earnings breakdown
+  baseEarnings      Float @default(0.0)
+  marketplaceBonus  Float @default(0.0)
+  absorptionBonus   Float @default(0.0)
+  fuelSurcharge     Float @default(0.0)
+  totalEarnings     Float @default(0.0)
+
+  status DeliveryStatus @default(PENDING)
+
+  relayNodeId String?
+  relayNode   RelayNode? @relation(fields: [relayNodeId], references: [id])
+
+  isMarketplaceLoad Boolean @default(false)
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  transactions Transaction[] // ✅ NEW
+}
+
+enum DeliveryStatus {
+  PENDING
+  EN_ROUTE_TO_PICKUP
+  CARGO_LOADED
+  IN_TRANSIT
+  EN_ROUTE_TO_DROP
+  AWAITING_CONFIRMATION
+  COMPLETED
+  CANCELLED
+}
+
+// ============================================
+// 7. TRANSACTION MODEL ✅ NEW
+// ============================================
+model Transaction {
+  id          String          @id @default(uuid())
   driverId    String
-  driver      User     @relation(fields: [driverId], references: [id])
-  cargoValue  String
-  validUntil  DateTime
-  status      EwbStatus @default(ACTIVE)
-  createdAt   DateTime @default(now())
+  driver      User            @relation(fields: [driverId], references: [id])
+  deliveryId  String?
+  delivery    Delivery?       @relation(fields: [deliveryId], references: [id])
+
+  amount      Float           // ₹3,200, ₹1,200, etc.
+  type        TransactionType
+  description String
+  route       String?         // "Mumbai → Pune"
+  
+  createdAt   DateTime        @default(now())
+}
+
+enum TransactionType {
+  BASE_DELIVERY      // Regular delivery payment
+  MARKETPLACE_BONUS  // Extra money from marketplace cargo
+  ABSORPTION_BONUS   // Bonus for accepting handover
+  FUEL_SURCHARGE     // Fuel cost reimbursement
+  TOLL_REIMBURSEMENT // Toll expenses
+  PENALTY            // Late delivery, damage penalty
+  BONUS              // Performance bonus
+  ADJUSTMENT         // Manual corrections
+}
+
+// ============================================
+// 8. NOTIFICATION MODEL
+// ============================================
+model Notification {
+  id     String           @id @default(uuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id])
+
+  type    NotificationType
+  title   String
+  message String
+  data    Json?
+
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+enum NotificationType {
+  DELIVERY_ASSIGNED
+  ABSORPTION_AVAILABLE
+  DELIVERY_UPDATE
+  ROUTE_UPDATE
+  SYSTEM_ALERT
+  GPS_VERIFIED
+  HANDOVER_COMPLETE
+  SHIPMENT_APPROVED
+  SHIPMENT_REJECTED
+  PAYMENT_PROCESSED  // ✅ NEW
+}
+
+// ============================================
+// 9. E-WAY BILL MODEL
+// ============================================
+model EWayBill {
+  id         String    @id @default(uuid())
+  billNo     String    @unique
+  vehicleNo  String
+  from       String
+  to         String
+  distance   String
+  driverId   String
+  driver     User      @relation(fields: [driverId], references: [id])
+  cargoValue String
+  validUntil DateTime
+  status     EwbStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum EwbStatus {
   ACTIVE
   INACTIVE
   EXPIRING_SOON
+  TRANSFERRED
 }
 
+// ============================================
+// 10. ACTIVITY LOG
+// ============================================
 model ActivityLog {
   id        String   @id @default(uuid())
   day       String
   requests  Int
-  type      String   // E.g., "WEEKLY_ACTIVITY"
+  type      String
   createdAt DateTime @default(now())
 }
-

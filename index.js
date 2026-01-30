@@ -2,6 +2,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const apiRoutes = require("./routes/api");
+const authRoutes = require("./routes/auth");
 const { PrismaClient } = require("@prisma/client");
 
 dotenv.config();
@@ -9,15 +10,14 @@ const app = express();
 const prisma = new PrismaClient();
 
 app.use(cors());
-app.use(express.json());
-
+app.use(express.json({ limit: '10mb' }));
 app.get('/', (req, res) => {
     res.send('Logistics Backend API Working');
 });
 
 app.use('/api', apiRoutes);
+app.use('/api/auth', authRoutes);
 
-// Global Error Handlers
 process.on('uncaughtException', (err) => {
     console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
     console.error(err.name, err.message, err.stack);
