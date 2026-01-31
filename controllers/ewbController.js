@@ -6,18 +6,24 @@ exports.getAllBills = async (req, res) => {
         const bills = await prisma.eWayBill.findMany({
             include: { driver: true }
         });
-        // Format response to match frontend expectations
-        const formattedBills = bills.map(bill => ({
-            id: bill.billNo,
-            vehicle: bill.vehicleNo,
-            from: bill.from,
-            to: bill.to,
-            dist: bill.distance,
-            driver: bill.driver.name,
-            value: bill.cargoValue,
-            valid: bill.validUntil.toLocaleDateString(),
-            status: bill.status
-        }));
+
+        const formattedBills = bills.map(bill => {
+            const date = new Date(bill.validUntil);
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const formattedDate = `${date.getDate()} ${months[date.getMonth()]}, ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+
+            return {
+                id: bill.billNo,
+                vehicle: bill.vehicleNo,
+                from: bill.from,
+                to: bill.to,
+                dist: bill.distance,
+                driver: bill.driver.name,
+                value: bill.cargoValue,
+                valid: formattedDate,
+                status: bill.status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
+            };
+        });
         res.json(formattedBills);
     } catch (error) {
         res.status(500).json({ error: error.message });

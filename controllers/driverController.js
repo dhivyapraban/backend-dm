@@ -17,9 +17,28 @@ exports.getAllDrivers = async (req, res) => {
                     } : {},
                     status ? { status: status.toUpperCase().replace(' ', '_') } : {}
                 ]
+            },
+            include: {
+                trucks: true
             }
         });
-        res.json(drivers);
+
+        const formattedDrivers = drivers.map(d => ({
+            id: d.id,
+            name: d.name,
+            vehicle: d.trucks?.[0]?.model || d.vehicleType || 'Unknown Vehicle',
+            plate: d.currentVehicleNo || d.trucks?.[0]?.licensePlate || 'N/A',
+            rating: d.rating,
+            trips: d.deliveriesCount,
+            status: d.status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' '),
+            avatar: d.initials || d.name.split(' ').map(n => n[0]).join(''),
+            color: d.avatarColor || 'bg-orange-500',
+            phone: d.phone,
+            type: d.vehicleType || d.trucks?.[0]?.type || 'Standard',
+            loc: d.homeBaseCity || 'Unknown'
+        }));
+
+        res.json(formattedDrivers);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
