@@ -345,16 +345,39 @@ const createDelivery = async (req, res) => {
             deliveryTime,
             cargoType,
             cargoWeight,
-            cargoVolume,
+            cargoVolumeLtrs,
             cargoValue,
-            specialInstructions
+            specialInstructions,
+            courierCompanyId,
+            dispatcherId,
+            distanceKm,
+            postalCode,
+            timeWindowStart,
+            timeWindowEnd
         } = req.body;
 
         // Validate required fields
-        if (!pickupLocation || !deliveryLocation || !cargoType || !cargoWeight) {
+        if (!pickupLocation || !deliveryLocation || !cargoType || !cargoWeight || !cargoVolumeLtrs) {
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields'
+                message: 'Missing required fields: pickupLocation, deliveryLocation, cargoType, cargoWeight, cargoVolumeLtrs'
+            });
+        }
+
+        // Validate coordinates
+        if (!pickupLat || !pickupLng || !deliveryLat || !deliveryLng) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required coordinates: pickupLat, pickupLng, deliveryLat, deliveryLng'
+            });
+        }
+
+        // Validate dispatcherId
+        const finalDispatcherId = dispatcherId || (req.user ? req.user.id : null);
+        if (!finalDispatcherId) {
+            return res.status(400).json({
+                success: false,
+                message: 'dispatcherId is required'
             });
         }
 
@@ -366,21 +389,24 @@ const createDelivery = async (req, res) => {
             data: {
                 packageId,
                 pickupLocation,
-                pickupLat: pickupLat ? parseFloat(pickupLat) : null,
-                pickupLng: pickupLng ? parseFloat(pickupLng) : null,
+                pickupLat: parseFloat(pickupLat),
+                pickupLng: parseFloat(pickupLng),
                 pickupTime: pickupTime ? new Date(pickupTime) : null,
                 dropLocation: deliveryLocation,
-                dropLat: deliveryLat ? parseFloat(deliveryLat) : null,
-                dropLng: deliveryLng ? parseFloat(deliveryLng) : null,
+                dropLat: parseFloat(deliveryLat),
+                dropLng: parseFloat(deliveryLng),
                 dropTime: deliveryTime ? new Date(deliveryTime) : null,
                 cargoType,
                 cargoWeight: parseFloat(cargoWeight),
-                cargoVolume: cargoVolume ? parseFloat(cargoVolume) : null,
-                cargoValue: cargoValue ? parseFloat(cargoValue) : null,
-                specialInstructions,
-                specialInstructions,
+                cargoVolumeLtrs: parseFloat(cargoVolumeLtrs),
+                distanceKm: distanceKm ? parseFloat(distanceKm) : null,
+                postalCode: postalCode || null,
+                timeWindowStart: timeWindowStart ? new Date(timeWindowStart) : null,
+                timeWindowEnd: timeWindowEnd ? new Date(timeWindowEnd) : null,
+                // specialInstructions: specialInstructions || null,
+                courierCompanyId: courierCompanyId || null,
                 status: 'PENDING',
-                dispatcherId: req.user ? req.user.id : (process.env.DEFAULT_DISPATCHER_ID || 'system-admin')
+                dispatcherId: finalDispatcherId
             }
         });
 
