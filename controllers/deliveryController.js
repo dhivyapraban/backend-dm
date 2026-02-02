@@ -329,6 +329,76 @@ const uploadPhotos = async (req, res) => {
     }
 };
 
+/**
+ * POST /api/deliveries/create - Create new delivery from package form
+ */
+const createDelivery = async (req, res) => {
+    try {
+        const {
+            pickupLocation,
+            pickupLat,
+            pickupLng,
+            pickupTime,
+            deliveryLocation,
+            deliveryLat,
+            deliveryLng,
+            deliveryTime,
+            cargoType,
+            cargoWeight,
+            cargoVolume,
+            cargoValue,
+            specialInstructions
+        } = req.body;
+
+        // Validate required fields
+        if (!pickupLocation || !deliveryLocation || !cargoType || !cargoWeight) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields'
+            });
+        }
+
+        // Generate unique package ID
+        const packageId = `PKG-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+        // Create delivery record
+        const delivery = await prisma.delivery.create({
+            data: {
+                packageId,
+                pickupLocation,
+                pickupLat: pickupLat ? parseFloat(pickupLat) : null,
+                pickupLng: pickupLng ? parseFloat(pickupLng) : null,
+                pickupTime: pickupTime ? new Date(pickupTime) : null,
+                dropLocation: deliveryLocation,
+                dropLat: deliveryLat ? parseFloat(deliveryLat) : null,
+                dropLng: deliveryLng ? parseFloat(deliveryLng) : null,
+                dropTime: deliveryTime ? new Date(deliveryTime) : null,
+                cargoType,
+                cargoWeight: parseFloat(cargoWeight),
+                cargoVolume: cargoVolume ? parseFloat(cargoVolume) : null,
+                cargoValue: cargoValue ? parseFloat(cargoValue) : null,
+                specialInstructions,
+                specialInstructions,
+                status: 'PENDING',
+                dispatcherId: req.user ? req.user.id : (process.env.DEFAULT_DISPATCHER_ID || 'system-admin')
+            }
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'Delivery created successfully',
+            data: delivery
+        });
+    } catch (error) {
+        console.error('Create delivery error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create delivery',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getAssignedDeliveries,
     acceptDelivery,
@@ -337,4 +407,5 @@ module.exports = {
     pickupCargo,
     completeDelivery,
     uploadPhotos,
+    createDelivery,
 };

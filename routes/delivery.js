@@ -3,8 +3,13 @@ const router = express.Router();
 const deliveryController = require('../controllers/deliveryController');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 
-// All delivery routes require driver role
+// Public/Shared routes (Dispatcher/Admin/Driver)
+router.post('/create', deliveryController.createDelivery);
+
+// Authenticate all routes
 router.use(authenticateToken);
+
+// Driver-only routes
 router.use(requireRole('DRIVER'));
 
 router.get('/assigned', deliveryController.getAssignedDeliveries);
