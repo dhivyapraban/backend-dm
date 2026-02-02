@@ -436,6 +436,7 @@ model AbsorptionTransfer {
   scannedAt             DateTime?
   
   checklistData         Json?
+  photos                Json?
   
   spaceAvailableExporter Float
   spaceAvailableImporter Float

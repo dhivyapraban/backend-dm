@@ -16,7 +16,7 @@ const backhaulRoutes = require('./routes/backhaul');
 const absorptionRoutes = require('./routes/absorption');
 const packagesRoutes = require('./routes/packages');
 const virtualHubRoutes = require('./routes/virtualHub');
-
+const SynergyMonitor = require('./services/synergyMonitor');
 
 
 dotenv.config();
@@ -33,6 +33,9 @@ const prisma = new PrismaClient();
 
 // Make io accessible to our routers
 app.set('io', io);
+
+// Initialize Synergy Monitor
+let synergyMonitor;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -60,6 +63,7 @@ app.use('/api/virtual-hubs', virtualHubRoutes);
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
+    // Allow drivers to join their own room for targeted notifications
     socket.on('join', (room) => {
         socket.join(room);
         console.log(`Socket ${socket.id} joined room ${room}`);
@@ -69,6 +73,10 @@ io.on('connection', (socket) => {
         console.log('User disconnected:', socket.id);
     });
 });
+
+// Start Synergy Monitor after Socket.io is ready
+synergyMonitor = new SynergyMonitor(io);
+synergyMonitor.start();
 
 process.on('uncaughtException', (err) => {
     console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
