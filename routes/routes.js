@@ -11,4 +11,6 @@ router.post('/create-and-assign', requireRole('DISPATCHER'), routeController.cre
 // Triggered by Dispatcher
 router.post('/allocate', requireRole('DISPATCHER'), routeController.allocateRoutes);
 
+router.post('/assign-multi-stop', requireRole('DISPATCHER'), routeController.assignMultiStopRoute);
+
 module.exports = router;

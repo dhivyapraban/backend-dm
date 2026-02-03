@@ -420,3 +420,175 @@ exports.allocateRoutes = async (req, res) => {
         res.status(500).json({ success: false, message: 'Internal server error during allocation', error: err.message });
     }
 };
+/**
+ * POST /api/routes/assign-multi-stop
+ * Resolve identifiers, match deliveries, and assign multi-stop route
+ */
+exports.assignMultiStopRoute = async (req, res) => {
+    try {
+        const {
+            driverPhone,
+            truckLicensePlate,
+            courierCompanyId,
+            totalDistance,
+            checkpoints
+        } = req.body;
+
+        // 1. Basic Validation
+        if (!driverPhone || !truckLicensePlate || !courierCompanyId || !totalDistance || !Array.isArray(checkpoints)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: driverPhone, truckLicensePlate, courierCompanyId, totalDistance, checkpoints'
+            });
+        }
+
+        // 2. Asset Identification (Lookup Phase)
+        const [driver, truck] = await Promise.all([
+            prisma.user.findUnique({
+                where: { phone: driverPhone },
+                select: { id: true, role: true, courierCompanyId: true, totalDistanceKm: true }
+            }),
+            prisma.truck.findUnique({
+                where: { licensePlate: truckLicensePlate },
+                select: { id: true, courierCompanyId: true, maxWeight: true, maxVolume: true, currentWeight: true, currentVolume: true }
+            })
+        ]);
+
+        if (!driver || driver.role !== 'DRIVER' || driver.courierCompanyId !== courierCompanyId) {
+            return res.status(404).json({
+                success: false,
+                message: 'Driver not found or does not belong to the specified company'
+            });
+        }
+
+        if (!truck || truck.courierCompanyId !== courierCompanyId) {
+            return res.status(404).json({
+                success: false,
+                message: 'Truck not found or does not belong to the specified company'
+            });
+        }
+
+        // 3. Delivery Resolution (Matching Phase)
+        const deliveryIds = [];
+        const deliveriesToLink = [];
+
+        for (const cp of checkpoints) {
+            const delivery = await prisma.delivery.findFirst({
+                where: {
+                    pickupLocation: cp.pickupLocation,
+                    dropLocation: cp.dropLocation,
+                    status: 'PENDING',
+                    // Relaxed constraints: find the delivery even if company or truck is not yet set correctly
+                    OR: [
+                        { courierCompanyId: courierCompanyId },
+                        { courierCompanyId: null }
+                    ]
+                }
+            });
+
+            if (!delivery) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Checkpoint mismatch: No PENDING delivery found for truck ${truckLicensePlate} from "${cp.pickupLocation}" to "${cp.dropLocation}"`
+                });
+            }
+
+            deliveryIds.push(delivery.id);
+            deliveriesToLink.push(delivery);
+        }
+
+        // 4. Enforce Driver Relay Logic
+        const HIGH_WORKLOAD_THRESHOLD = 500; // km
+        const isLongDistance = totalDistance > 300;
+        const driverHistory = driver.totalDistanceKm || 0;
+
+        if (isLongDistance && driverHistory < HIGH_WORKLOAD_THRESHOLD) {
+            return res.status(400).json({
+                success: false,
+                message: `Workload Balance Error: Long-distance mission (${totalDistance}km) requires experienced driver (>${HIGH_WORKLOAD_THRESHOLD}km history). Driver has ${driverHistory}km.`
+            });
+        }
+
+        if (!isLongDistance && driverHistory >= HIGH_WORKLOAD_THRESHOLD) {
+            return res.status(400).json({
+                success: false,
+                message: `Workload Balance Error: Short-haul mission (${totalDistance}km) should be assigned to driver with less history. Driver has ${driverHistory}km.`
+            });
+        }
+
+        // 5. Atomic Transaction
+        const totalWeight = deliveriesToLink.reduce((sum, d) => sum + (d.cargoWeight || 0), 0);
+        const totalVolume = deliveriesToLink.reduce((sum, d) => sum + (d.cargoVolumeLtrs || 0), 0);
+
+        // Generate Waypoints
+        const waypoints = [];
+        deliveriesToLink.forEach(d => {
+            waypoints.push({ type: 'PICKUP', location: d.pickupLocation, lat: d.pickupLat, lng: d.pickupLng, deliveryId: d.id });
+            waypoints.push({ type: 'DROP', location: d.dropLocation, lat: d.dropLat, lng: d.dropLng, deliveryId: d.id });
+        });
+
+        const result = await prisma.$transaction(async (tx) => {
+            const route = await tx.optimizedRoute.create({
+                data: {
+                    courierCompanyId,
+                    truckId: truck.id,
+                    driverId: driver.id,
+                    totalDistance,
+                    totalPackages: deliveriesToLink.length,
+                    totalWeight,
+                    totalVolume,
+                    utilizationPercent: truck.maxWeight ? (totalWeight / truck.maxWeight) * 100 : 0,
+                    baselineDistance: totalDistance,
+                    carbonSaved: 0,
+                    emptyMilesSaved: 0,
+                    waypoints: waypoints,
+                    estimatedStartTime: new Date(),
+                    estimatedEndTime: new Date(Date.now() + 3600000), // Default 1hr
+                    status: 'ALLOCATED'
+                }
+            });
+
+            await tx.delivery.updateMany({
+                where: { id: { in: deliveryIds } },
+                data: {
+                    optimizedRouteId: route.id,
+                    driverId: driver.id,
+                    status: 'ALLOCATED'
+                }
+            });
+
+            // Update driver total distance
+            await tx.user.update({
+                where: { id: driver.id },
+                data: { totalDistanceKm: { increment: totalDistance } }
+            });
+
+            // Update truck (mark not available)
+            await tx.truck.update({
+                where: { id: truck.id },
+                data: { isAvailable: false }
+            });
+
+            return route;
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'Multi-stop route created successfully',
+            data: {
+                route: result,
+                checkpointsLinked: checkpoints.length
+            }
+        });
+
+    } catch (error) {
+        console.error('Multi-stop assignment error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error during multi-stop assignment',
+            error: error.message
+        });
+    }
+};
+
+module.exports = exports;
