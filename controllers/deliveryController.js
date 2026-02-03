@@ -425,6 +425,58 @@ const createDelivery = async (req, res) => {
     }
 };
 
+/**
+ * GET /api/deliveries/unassigned - Dispatcher's list of unassigned pending deliveries
+ */
+const getUnassignedDeliveries = async (req, res) => {
+    try {
+        const { courierCompanyId } = req.query;
+
+        if (!courierCompanyId) {
+            return res.status(400).json({
+                success: false,
+                message: 'courierCompanyId is required',
+            });
+        }
+
+        const whereClause = {
+            courierCompanyId,
+            status: 'PENDING',
+            driverId: null,
+            truckId: null,
+            optimizedRouteId: null,
+        };
+
+        const [count, deliveries] = await Promise.all([
+            prisma.delivery.count({ where: whereClause }),
+            prisma.delivery.findMany({
+                where: whereClause,
+                include: {
+                    shipment: true,
+                },
+                orderBy: {
+                    createdAt: 'desc',
+                },
+            }),
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                count,
+                deliveries,
+            },
+        });
+    } catch (error) {
+        console.error('Get unassigned deliveries error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch unassigned deliveries',
+            error: error.message,
+        });
+    }
+};
+
 module.exports = {
     getAssignedDeliveries,
     acceptDelivery,
@@ -434,4 +486,5 @@ module.exports = {
     completeDelivery,
     uploadPhotos,
     createDelivery,
+    getUnassignedDeliveries,
 };

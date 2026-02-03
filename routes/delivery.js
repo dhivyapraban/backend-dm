@@ -9,6 +9,9 @@ router.post('/create', deliveryController.createDelivery);
 // Authenticate all routes
 router.use(authenticateToken);
 
+// Dispatcher routes
+router.get('/unassigned', requireRole('DISPATCHER'), deliveryController.getUnassignedDeliveries);
+
 // Driver-only routes
 router.use(requireRole('DRIVER'));
 
