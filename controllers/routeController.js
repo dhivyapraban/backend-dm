@@ -22,8 +22,8 @@ exports.createAndAssignRoute = async (req, res) => {
     try {
         const {
             courierCompanyId,
-            truckId,
-            driverId,
+            truckNumber,
+            driverNumber,
             deliveryIds,
             totalDistance,
             totalDuration,
@@ -35,7 +35,7 @@ exports.createAndAssignRoute = async (req, res) => {
         } = req.body;
 
         // Validate required fields
-        if (!courierCompanyId || !truckId || !driverId || !deliveryIds || !totalDistance) {
+        if (!courierCompanyId || !truckNumber || !driverNumber || !deliveryIds || !totalDistance) {
             return res.status(400).json({
                 success: false,
                 message: 'Missing required fields: courierCompanyId, truckId, driverId, deliveryIds, totalDistance'
@@ -52,7 +52,7 @@ exports.createAndAssignRoute = async (req, res) => {
         // 1. COMPANY-LEVEL ISOLATION: Validate all entities belong to same company
         const [driver, truck] = await Promise.all([
             prisma.user.findUnique({
-                where: { id: driverId },
+                where: { phone: driverNumber },
                 select: {
                     id: true,
                     courierCompanyId: true,
@@ -61,7 +61,7 @@ exports.createAndAssignRoute = async (req, res) => {
                 }
             }),
             prisma.truck.findUnique({
-                where: { id: truckId },
+                where: { licensePlate: truckNumber },
                 select: {
                     id: true,
                     courierCompanyId: true,
