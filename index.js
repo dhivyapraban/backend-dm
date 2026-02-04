@@ -60,7 +60,10 @@ app.use('/api/absorption', absorptionRoutes);
 app.use('/api/packages', packagesRoutes);
 app.use('/api/virtual-hubs', virtualHubRoutes);
 app.use('/api/audits', auditsRoutes);
+
 app.use('/', auditDamageRoutes);
+
+
 
 
 
