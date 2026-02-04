@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { jwtConfig, verifyToken } = require('../config/jwt');
+const { jwtConfig, verifyToken } = require('../config/jwt.js');
 const prisma = require('../config/database');
 
 /**
