@@ -163,6 +163,32 @@ exports.getLiveTrackingWeb = async (req, res) => {
     }
 };
 
+exports.getLiveTrackingGPS = async (req, res) => {
+    try {
+        const trucks = await prisma.truck.findMany({
+            where: { isAvailable: false },
+            include: { owner: true },
+            take: 20
+        });
+
+        const trackingData = trucks.map(t => ({
+            id: t.id,
+            name: `${t.licensePlate} • ${t.owner?.name || 'Unassigned'}`,
+            status: 'Active',
+            location: {
+                lat: t.currentLat || 19.0760, // Fallback to Mumbai if null
+                lng: t.currentLng || 72.8777,
+                heading: 0,
+                speed: 60
+            }
+        }));
+
+        res.json(trackingData);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
 exports.getRecentAbsorptions = async (req, res) => {
     try {
         // Get today's absorption opportunities

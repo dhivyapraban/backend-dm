@@ -11,11 +11,13 @@ router.get('/dashboard/stats', dashboardController.getStats);
 router.get('/dashboard/activity', dashboardController.getActivity);
 router.get('/dashboard/live-tracking', dashboardController.getLiveTracking); // Original for Mobile
 router.get('/dashboard/live-tracking-web', dashboardController.getLiveTrackingWeb); // New for Web
+router.get('/dashboard/live-tracking-gps', dashboardController.getLiveTrackingGPS); // New for GPS Tracking
 router.get('/dashboard/recent-absorptions', dashboardController.getRecentAbsorptions);
 
 // Drivers
 router.get('/drivers', driverController.getAllDrivers);
 router.get('/drivers/:id', driverController.getDriverById);
+router.get('/drivers/:truckId/active-route', driverController.getActiveRoute); // New for Route Visualization
 router.post('/drivers', driverController.createDriver);
 router.put('/drivers/:id', driverController.updateDriver);
 router.delete('/drivers/:id', driverController.deleteDriver);

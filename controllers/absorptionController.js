@@ -1,6 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-
 // GET /api/absorption/map-data - Get routes and virtual hubs for map visualization
 const getMapData = async (req, res) => {
     try {
@@ -43,7 +42,6 @@ const getMapData = async (req, res) => {
                 }
             })
         ]);
-
         // Format routes for map display
         const formattedRoutes = routes.map(route => {
             const firstDelivery = route.deliveries[0];
@@ -66,7 +64,6 @@ const getMapData = async (req, res) => {
                 status: route.status
             };
         });
-
         res.json({
             routes: formattedRoutes,
             hubs: hubs
@@ -76,7 +73,6 @@ const getMapData = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
-
 // GET /api/absorption/active - Get active absorption requests
 const getActiveAbsorptions = async (req, res) => {
     try {
@@ -105,7 +101,6 @@ const getActiveAbsorptions = async (req, res) => {
                 proposedAt: 'desc'
             }
         });
-
         const formattedAbsorptions = absorptions.map(abs => ({
             id: abs.id,
             route1: {
@@ -127,16 +122,19 @@ const getActiveAbsorptions = async (req, res) => {
             carbonSaved: abs.potentialCarbonSaved,
             meetTime: abs.estimatedMeetTime,
             status: abs.status,
-            proposedAt: abs.proposedAt
-        }));
-
+            proposedAt: abs.proposedAt,
+            // Added fields for frontend compatibility
+            truck1: abs.route1.truck?.licensePlate,
+            truck2: abs.route2.truck?.licensePlate,
+            weight: abs.spaceRequiredWeight,
+            type: abs.route1.truck?.type || 'Standard', // Default to Standard if undefined
+         }));
         res.json(formattedAbsorptions);
     } catch (error) {
         console.error('Get active absorptions error:', error);
         res.status(500).json({ error: error.message });
     }
 };
-
 module.exports = {
     getMapData,
     getActiveAbsorptions

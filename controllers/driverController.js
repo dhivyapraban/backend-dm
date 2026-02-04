@@ -15,7 +15,8 @@ exports.getAllDrivers = async (req, res) => {
                             { homeBaseCity: { contains: search, mode: 'insensitive' } }
                         ]
                     } : {},
-                    status ? { status: status.toUpperCase().replace(' ', '_') } : {}
+                    status ? { status: status.toUpperCase().replace(' ', '_') } : {},
+                    { registrationStatus: { not: 'REJECTED' } }
                 ]
             },
             include: {
@@ -81,8 +82,45 @@ exports.updateDriver = async (req, res) => {
 
 exports.deleteDriver = async (req, res) => {
     try {
-        await prisma.user.delete({ where: { id: req.params.id } });
+        const timestamp = Date.now();
+        await prisma.user.update({ 
+            where: { id: req.params.id },
+            data: {
+                registrationStatus: 'REJECTED',
+                status: 'OFF_DUTY',
+                name: 'Deleted Driver',
+                phone: `deleted_${timestamp}_${req.params.id.substring(0, 5)}`,
+                qrCode: `deleted_${timestamp}_${req.params.id.substring(0, 5)}`,
+                currentVehicleNo: null
+            }
+        });
         res.status(204).send();
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getActiveRoute = async (req, res) => {
+    try {
+        const { truckId } = req.params;
+        const activeRoute = await prisma.optimizedRoute.findFirst({
+            where: {
+                truckId: truckId,
+                status: { in: ['Allocated', 'Active'] } 
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        if (!activeRoute) {
+            return res.status(404).json({ message: 'No active route found' });
+        }
+
+        res.json({
+            truckId: truckId,
+            routeId: activeRoute.id,
+            polyline: activeRoute.routePolyline, 
+            checkpoints: activeRoute.waypoints || [] 
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
