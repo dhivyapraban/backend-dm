@@ -1,5 +1,5 @@
 const prisma = require('../config/database');
-const { generateAccessToken, refreshAccessToken } = require('../config/jwt');
+const { generateAccessToken, refreshAccessToken } = require('../config/jwt.js');
 const Joi = require('joi');
 const twilio = require('twilio');
 const dotenv = require('dotenv');

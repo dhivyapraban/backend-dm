@@ -16,6 +16,8 @@ const backhaulRoutes = require('./routes/backhaul');
 const absorptionRoutes = require('./routes/absorption');
 const packagesRoutes = require('./routes/packages');
 const virtualHubRoutes = require('./routes/virtualHub');
+const auditsRoutes = require('./routes/audits');
+const auditDamageRoutes = require('./routes/auditDamage');
 const SynergyMonitor = require('./services/synergyMonitor');
 
 
@@ -57,6 +59,8 @@ app.use('/api/backhaul', backhaulRoutes);
 app.use('/api/absorption', absorptionRoutes);
 app.use('/api/packages', packagesRoutes);
 app.use('/api/virtual-hubs', virtualHubRoutes);
+app.use('/api/audits', auditsRoutes);
+app.use('/', auditDamageRoutes);
 
 
 
