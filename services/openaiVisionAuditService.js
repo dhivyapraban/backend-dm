@@ -56,7 +56,7 @@ async function auditBoxDamageWithOpenAI({
   refB,
   curA,
   curB,
-  model = process.env.OPENAI_VISION_MODEL || 'gpt-4o',
+  model = process.env.OPENAI_VISION_MODEL || 'gpt-4o-2024-08-06',
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -103,9 +103,14 @@ async function auditBoxDamageWithOpenAI({
         ],
       },
     ],
-    response_format: {
-      type: 'json_schema',
-      json_schema: RESPONSE_SCHEMA,
+    // Structured Outputs (Responses API): moved from `response_format` to `text.format`.
+    text: {
+      format: {
+        type: 'json_schema',
+        name: RESPONSE_SCHEMA.name,
+        strict: true,
+        schema: RESPONSE_SCHEMA.schema,
+      },
     },
     temperature: 0.2,
   });
