@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { validateBoxImage } = require('../utils/imageValidation');
-const { auditBoxDamageWithOpenAI } = require('../services/openaiVisionAuditService');
+const { auditBoxDamageWithClip } = require('../services/hfClipAuditService');
 
 function nowIso() {
   return new Date().toISOString();
@@ -58,7 +58,7 @@ async function auditDamage(req, res) {
       });
     }
 
-    // 1) Server-side image validation BEFORE LLM.
+    // 1) Server-side image validation BEFORE HF embedding.
     const images = [refA, refB, curA, curB];
     const validations = {};
 
@@ -75,25 +75,21 @@ async function auditDamage(req, res) {
       }
     }
 
-    // 2) Vision LLM comparison.
-    const llm = await auditBoxDamageWithOpenAI({
+    // 2) CLIP embeddings + cosine similarity (policy-based decision).
+    const clip = await auditBoxDamageWithClip({
       refA,
       refB,
       curA,
       curB,
     });
 
-    // 3) Post-processing / policy enforcement.
-    const damagePercent = Number(llm.damage_percent);
-    const confidence = Number(llm.confidence);
-    const policySevere = Number.isFinite(damagePercent) && damagePercent > 35;
-
+    // 3) Result (already policy-based and explainable).
     const result = {
-      severe_damage: policySevere,
-      damage_percent: Number.isFinite(damagePercent) ? damagePercent : 0,
-      confidence: Number.isFinite(confidence) ? confidence : 0,
-      reason: typeof llm.reason === 'string' ? llm.reason : '',
-      escalated_to_admin: policySevere,
+      severe_damage: clip.severe_damage === true,
+      damage_percent: Number(clip.damage_percent) || 0,
+      confidence: Number(clip.confidence) || 0,
+      reason: typeof clip.reason === 'string' ? clip.reason : '',
+      escalated_to_admin: clip.escalated_to_admin === true,
     };
 
     const auditLog = {
@@ -102,7 +98,7 @@ async function auditDamage(req, res) {
       box_id: boxId,
       client_timestamp: clientTimestamp,
       validation: validations,
-      llm_raw: llm,
+      clip_raw: clip,
       result,
     };
 
@@ -115,7 +111,7 @@ async function auditDamage(req, res) {
     }
 
     // 5) Admin notification hook
-    if (policySevere) {
+    if (result.severe_damage) {
       try {
         const io = req.app.get('io');
         if (io) {
@@ -136,7 +132,13 @@ async function auditDamage(req, res) {
     return res.status(200).json(result);
   } catch (err) {
     console.error('auditDamage error:', err);
-    const status = err && err.statusCode ? Number(err.statusCode) : 500;
+    const status =
+      (err && err.statusCode != null ? Number(err.statusCode) : null) ||
+      (err && err.status != null ? Number(err.status) : null) ||
+      (err && err.response && err.response.status != null
+        ? Number(err.response.status)
+        : null) ||
+      500;
     return res.status(status).json({
       error: 'audit_failed',
       message: err && err.message ? String(err.message) : 'Audit failed',
